@@ -37,17 +37,20 @@ type storyService struct {
 	storyRepo     repositories.StoryRepository
 	genreRepo     repositories.GenreRepository
 	storyViewRepo repositories.StoryViewRepository
+	uploadService UploadService
 }
 
 func NewStoryService(
 	storyRepo repositories.StoryRepository,
 	genreRepo repositories.GenreRepository,
 	storyViewRepo repositories.StoryViewRepository,
+	uploadService UploadService,
 ) StoryService {
 	return &storyService{
 		storyRepo:     storyRepo,
 		genreRepo:     genreRepo,
 		storyViewRepo: storyViewRepo,
+		uploadService: uploadService,
 	}
 }
 
@@ -88,6 +91,37 @@ func (s *storyService) UpdateStory(id uuid.UUID, updatedStory *models.Story) err
 		existingStory.Description = updatedStory.Description
 	}
 	if updatedStory.CoverImageURL != nil {
+		// Delete old cover image if it exists and is different from the new one
+		if existingStory.CoverImageURL != nil &&
+			*existingStory.CoverImageURL != "" &&
+			*existingStory.CoverImageURL != *updatedStory.CoverImageURL {
+			
+			// Debug: Log old and new URLs
+			println("[StoryService] Old cover URL:", *existingStory.CoverImageURL)
+			println("[StoryService] New cover URL:", *updatedStory.CoverImageURL)
+			
+			oldPublicID := extractCloudinaryPublicID(*existingStory.CoverImageURL)
+			println("[StoryService] Extracted public_id:", oldPublicID)
+			
+			if oldPublicID != "" && s.uploadService != nil {
+				// Delete asynchronously, don't block update if delete fails
+				go func(publicID string) {
+					println("[StoryService] Attempting to delete:", publicID)
+					if err := s.uploadService.DeleteImage(publicID); err != nil {
+						println("[StoryService] Failed to delete old cover:", err.Error())
+					} else {
+						println("[StoryService] Successfully deleted old cover:", publicID)
+					}
+				}(oldPublicID)
+			} else {
+				if oldPublicID == "" {
+					println("[StoryService] WARNING: Could not extract public_id from URL")
+				}
+				if s.uploadService == nil {
+					println("[StoryService] WARNING: uploadService is nil")
+				}
+			}
+		}
 		existingStory.CoverImageURL = updatedStory.CoverImageURL
 	}
 	if updatedStory.Status != "" {
@@ -226,3 +260,66 @@ func (s *storyService) generateUniqueSlug(title string) string {
 	// Slug exists, append timestamp
 	return baseSlug + "-" + uuid.New().String()[:8]
 }
+
+// Helper: Extract Cloudinary public ID from URL
+// Cloudinary URLs format: https://res.cloudinary.com/{cloud}/image/upload/{transformations}/{version}/{folder}/{filename}
+// public_id = folder/filename (without extension)
+func extractCloudinaryPublicID(url string) string {
+	if url == "" {
+		return ""
+	}
+
+	// Find "upload/" in URL
+	uploadIdx := strings.Index(url, "/upload/")
+	if uploadIdx == -1 {
+		return ""
+	}
+
+	// Get everything after "upload/"
+	afterUpload := url[uploadIdx+8:]
+
+	// Split by "/"
+	parts := strings.Split(afterUpload, "/")
+	if len(parts) < 2 {
+		return ""
+	}
+
+	// Skip version (starts with "v") and transformations (contains "_" like "f_webp")
+	var publicIDParts []string
+	for _, part := range parts {
+		// Skip version numbers (v123456789)
+		if len(part) > 1 && part[0] == 'v' {
+			isVersion := true
+			for _, c := range part[1:] {
+				if c < '0' || c > '9' {
+					isVersion = false
+					break
+				}
+			}
+			if isVersion {
+				continue
+			}
+		}
+		// Skip transformations (contain specific patterns)
+		if strings.Contains(part, "_") && (strings.HasPrefix(part, "f_") ||
+			strings.HasPrefix(part, "q_") ||
+			strings.HasPrefix(part, "w_") ||
+			strings.HasPrefix(part, "h_")) {
+			continue
+		}
+		publicIDParts = append(publicIDParts, part)
+	}
+
+	if len(publicIDParts) == 0 {
+		return ""
+	}
+
+	// Join and remove file extension
+	publicID := strings.Join(publicIDParts, "/")
+	if lastDot := strings.LastIndex(publicID, "."); lastDot != -1 {
+		publicID = publicID[:lastDot]
+	}
+
+	return publicID
+}
+

@@ -97,7 +97,21 @@ func main() {
 
 	// Initialize services - Khởi tạo service
 	authService := services.NewAuthService(userRepo, refreshTokenRepo, cfg) // Cập nhật với refreshTokenRepo
-	storyService := services.NewStoryService(storyRepo, genreRepo, storyViewRepo)
+
+	// Initialize upload service (optional - requires Cloudinary config)
+	var uploadHandler *handlers.UploadHandler
+	uploadService, err := services.NewUploadService(cfg)
+	if err != nil {
+		log.Printf("⚠️ Upload service not initialized: %v", err)
+		log.Println("💡 Add CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET to .env")
+	} else {
+		uploadHandler = handlers.NewUploadHandler(uploadService)
+		log.Println("✅ Upload service initialized (Cloudinary)")
+	}
+
+	// Pass uploadService to storyService for old cover image deletion
+	storyService := services.NewStoryService(storyRepo, genreRepo, storyViewRepo, uploadService)
+	genreService := services.NewGenreService(genreRepo)
 	chapterService := services.NewChapterService(chapterRepo, storyRepo)
 	bookmarkService := services.NewBookmarkService(bookmarkRepo, storyRepo)
 	commentService := services.NewCommentService(commentRepo, storyRepo, chapterRepo)
@@ -124,22 +138,12 @@ func main() {
 		}
 	}()
 
-	// Initialize upload service (optional - requires Cloudinary config)
-	var uploadHandler *handlers.UploadHandler
-	uploadService, err := services.NewUploadService(cfg)
-	if err != nil {
-		log.Printf("⚠️ Upload service not initialized: %v", err)
-		log.Println("💡 Add CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET to .env")
-	} else {
-		uploadHandler = handlers.NewUploadHandler(uploadService)
-		log.Println("✅ Upload service initialized (Cloudinary)")
-	}
-
 	// Initialize handlers - Khởi tạo handler
 	h := &routes.Handlers{
 		Auth:         handlers.NewAuthHandler(authService, uploadService, cfg),
 		Story:        handlers.NewStoryHandler(storyService),
 		Chapter:      handlers.NewChapterHandler(chapterService),
+		Genre:        handlers.NewGenreHandler(genreService),
 		Bookmark:     handlers.NewBookmarkHandler(bookmarkService),
 		Comment:      handlers.NewCommentHandler(commentService),
 		Notification: handlers.NewNotificationHandler(notificationService),

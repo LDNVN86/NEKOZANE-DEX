@@ -14,6 +14,7 @@ type Handlers struct {
 	Auth         *handlers.AuthHandler
 	Story        *handlers.StoryHandler
 	Chapter      *handlers.ChapterHandler
+	Genre        *handlers.GenreHandler
 	Bookmark     *handlers.BookmarkHandler
 	Comment      *handlers.CommentHandler
 	Notification *handlers.NotificationHandler
@@ -168,6 +169,16 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config, h *Handlers) {
 					adminMedia.POST("", h.Upload.UploadSingleImage)
 					adminMedia.POST("/chapter", h.Upload.UploadChapterImages)
 					adminMedia.DELETE("", h.Upload.DeleteImage)
+				}
+			}
+
+			// Admin Genres
+			if h.Genre != nil {
+				adminGenres := admin.Group("/genres")
+				{
+					adminGenres.POST("", h.Genre.CreateGenre)
+					adminGenres.PUT("/:id", h.Genre.UpdateGenre)
+					adminGenres.DELETE("/:id", h.Genre.DeleteGenre)
 				}
 			}
 		}

@@ -212,6 +212,13 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
+	// Debug: Log received request
+	fmt.Printf("[UpdateProfile] Received request - Username: %v, AvatarURL: %v, OldAvatarURL: %v\n",
+		req.Username != nil, req.AvatarURL != nil, req.OldAvatarURL != nil)
+	if req.OldAvatarURL != nil {
+		fmt.Printf("[UpdateProfile] Old avatar URL value: %s\n", *req.OldAvatarURL)
+	}
+
 	// At least one field must be provided
 	if req.Username == nil && req.AvatarURL == nil {
 		response.BadRequest(c, "Không có thông tin để cập nhật")

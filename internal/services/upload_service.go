@@ -64,7 +64,7 @@ func (s *uploadService) UploadImage(file multipart.File, filename string, folder
 		Folder:         folder,
 		ResourceType:   "image",
 		AllowedFormats: []string{"jpg", "jpeg", "png", "webp", "gif"},
-		Transformation: "q_auto,f_auto", // Auto quality and format
+		Transformation: "f_webp,q_auto", // Force WebP with auto quality
 	})
 	if err != nil {
 		return "", fmt.Errorf("upload failed: %w", err)
