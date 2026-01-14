@@ -31,6 +31,7 @@ type StoryService interface {
 	DeleteStory(id uuid.UUID) error
 	GetStoryByID(id uuid.UUID) (*models.Story, error)
 	GetAllStoriesAdmin(page, limit int) ([]models.Story, int64, error)
+	SearchStoriesAdmin(query string, page, limit int) ([]models.Story, int64, error)
 }
 
 type storyService struct {
@@ -196,6 +197,14 @@ func (s *storyService) GetAllStories(page, limit int) ([]models.Story, int64, er
 // GetAllStoriesAdmin - Lấy tất cả truyện (Admin)
 func (s *storyService) GetAllStoriesAdmin(page, limit int) ([]models.Story, int64, error) {
 	return s.storyRepo.GetAllStories(page, limit, false)
+}
+
+// SearchStoriesAdmin - Tìm kiếm truyện (Admin - includes drafts)
+func (s *storyService) SearchStoriesAdmin(query string, page, limit int) ([]models.Story, int64, error) {
+	if strings.TrimSpace(query) == "" {
+		return s.storyRepo.GetAllStories(page, limit, false)
+	}
+	return s.storyRepo.SearchStoriesAdmin(query, page, limit)
 }
 
 // GetStoriesByGenre - Lấy truyện theo thể loại (Public)

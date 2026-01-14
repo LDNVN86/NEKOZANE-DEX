@@ -149,6 +149,7 @@ func main() {
 		Notification: handlers.NewNotificationHandler(notificationService),
 		Upload:       uploadHandler,
 		CSRF:         handlers.NewCSRFHandler(cfg),
+		User:         handlers.NewUserHandler(userRepo),
 	}
 
 	// Setup Gin router - Setup router cho Gin

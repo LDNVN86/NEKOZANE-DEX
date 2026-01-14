@@ -20,6 +20,7 @@ type Handlers struct {
 	Notification *handlers.NotificationHandler
 	Upload       *handlers.UploadHandler
 	CSRF         *handlers.CSRFHandler
+	User         *handlers.UserHandler
 }
 
 func SetupRoutes(r *gin.Engine, cfg *config.Config, h *Handlers) {
@@ -179,6 +180,18 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config, h *Handlers) {
 					adminGenres.POST("", h.Genre.CreateGenre)
 					adminGenres.PUT("/:id", h.Genre.UpdateGenre)
 					adminGenres.DELETE("/:id", h.Genre.DeleteGenre)
+				}
+			}
+
+			// Admin Users
+			if h.User != nil {
+				adminUsers := admin.Group("/users")
+				{
+					adminUsers.GET("", h.User.GetAllUsersAdmin)
+					adminUsers.PUT("/:id", h.User.AdminUpdateUser)
+					adminUsers.PUT("/:id/role", h.User.UpdateUserRole)
+					adminUsers.PUT("/:id/status", h.User.ToggleUserStatus)
+					adminUsers.PUT("/:id/password", h.User.AdminResetPassword)
 				}
 			}
 		}

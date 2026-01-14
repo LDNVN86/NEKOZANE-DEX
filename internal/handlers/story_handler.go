@@ -354,13 +354,22 @@ func (h *StoryHandler) GetStoryByID(c *gin.Context) {
 // @Produce json
 // @Param page query int false "Page number" default(1)
 // @Param limit query int false "Items per page" default(20)
+// @Param search query string false "Search keyword"
 // @Success 200 {object} response.Pagination
 // @Router /api/admin/stories [get]
 func (h *StoryHandler) GetAllStoriesAdmin(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	search := c.Query("search")
 
-	stories, total, err := h.storyService.GetAllStoriesAdmin(page, limit)
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+
+	stories, total, err := h.storyService.SearchStoriesAdmin(search, page, limit)
 	if err != nil {
 		response.InternalServerError(c, "Không thể lấy danh sách truyện")
 		return

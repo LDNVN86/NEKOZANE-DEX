@@ -18,6 +18,7 @@ type StoryRepository interface{
 	GetStoriesLatest(limit int) ([]models.Story, error)
 	GetStoriesHot(limit int) ([]models.Story, error)
 	SearchStories(query string, page, limit int) ([]models.Story, int64, error)
+	SearchStoriesAdmin(query string, page, limit int) ([]models.Story, int64, error)
 	IncrementViewCountStory(id uuid.UUID) error
 }
 
@@ -129,4 +130,18 @@ func (r *storyRepository) SearchStories(query string, page, limit int) ([]models
 func (r *storyRepository) IncrementViewCountStory(id uuid.UUID) error {
 	return r.db.Model(&models.Story{}).Where("id = ?", id).
 		UpdateColumn("view_count", gorm.Expr("view_count + 1")).Error
+}
+
+//SearchStoriesAdmin - Admin search (includes drafts)
+func (r *storyRepository) SearchStoriesAdmin(query string, page, limit int) ([]models.Story, int64, error) {
+	var stories []models.Story
+	var total int64
+	searchQuery := "%" + query + "%"
+	
+	r.db.Model(&models.Story{}).Where("title ILIKE ? OR description ILIKE ?", 
+		searchQuery, searchQuery).Count(&total)
+	offset := (page - 1) * limit
+	err := r.db.Preload("Genres").Where("title ILIKE ? OR description ILIKE ?", 
+		searchQuery, searchQuery).Offset(offset).Limit(limit).Order("updated_at DESC").Find(&stories).Error
+	return stories, total, err
 }
