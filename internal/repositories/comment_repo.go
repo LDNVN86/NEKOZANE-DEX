@@ -12,8 +12,8 @@ type CommentRepository interface {
 	FindCommentByID(id uuid.UUID) (*models.Comment, error)
 	UpdateComment(comment *models.Comment) error
 	DeleteComment(id uuid.UUID) error
-	GetCommentsByStory(storyID uuid.UUID, page, limit int) ([]models.Comment, int64, error)
-	GetCommentsByChapter(chapterID uuid.UUID, page, limit int) ([]models.Comment, int64, error)
+	GetCommentsByStory(storyID uuid.UUID, page, limit int, sortBy string) ([]models.Comment, int64, error)
+	GetCommentsByChapter(chapterID uuid.UUID, page, limit int, sortBy string) ([]models.Comment, int64, error)
 	GetCommentReplies(parentID uuid.UUID) ([]models.Comment, error)
 	UpdateLikeCount(commentID uuid.UUID, count int) error
 	TogglePin(commentID uuid.UUID, isPinned bool) error
@@ -52,8 +52,20 @@ func (r *commentRepository) DeleteComment(id uuid.UUID) error {
 	return r.db.Delete(&models.Comment{}, "id = ?", id).Error
 }
 
+// getCommentOrderClause - Get ORDER BY clause based on sortBy parameter
+func getCommentOrderClause(sortBy string) string {
+	switch sortBy {
+	case "oldest":
+		return "is_pinned DESC, created_at ASC"
+	case "top":
+		return "is_pinned DESC, like_count DESC, created_at DESC"
+	default: // "newest" or empty
+		return "is_pinned DESC, created_at DESC"
+	}
+}
+
 // GetCommentsByStory - Lấy Comments theo Story (top-level only)
-func (r *commentRepository) GetCommentsByStory(storyID uuid.UUID, page, limit int) ([]models.Comment, int64, error) {
+func (r *commentRepository) GetCommentsByStory(storyID uuid.UUID, page, limit int, sortBy string) ([]models.Comment, int64, error) {
 	var comments []models.Comment
 	var total int64
 
@@ -62,17 +74,18 @@ func (r *commentRepository) GetCommentsByStory(storyID uuid.UUID, page, limit in
 	query.Count(&total)
 
 	offset := (page - 1) * limit
+	orderClause := getCommentOrderClause(sortBy)
 	err := r.db.Preload("User").Preload("Replies.User").
 		Where("story_id = ? AND chapter_id IS NULL AND parent_id IS NULL AND is_approved = ?", storyID, true).
 		Offset(offset).Limit(limit).
-		Order("is_pinned DESC, created_at DESC").
+		Order(orderClause).
 		Find(&comments).Error
 
 	return comments, total, err
 }
 
 // GetCommentsByChapter - Lấy Comments theo Chapter
-func (r *commentRepository) GetCommentsByChapter(chapterID uuid.UUID, page, limit int) ([]models.Comment, int64, error) {
+func (r *commentRepository) GetCommentsByChapter(chapterID uuid.UUID, page, limit int, sortBy string) ([]models.Comment, int64, error) {
 	var comments []models.Comment
 	var total int64
 
@@ -81,10 +94,11 @@ func (r *commentRepository) GetCommentsByChapter(chapterID uuid.UUID, page, limi
 	query.Count(&total)
 
 	offset := (page - 1) * limit
+	orderClause := getCommentOrderClause(sortBy)
 	err := r.db.Preload("User").Preload("Replies.User").
 		Where("chapter_id = ? AND parent_id IS NULL AND is_approved = ?", chapterID, true).
 		Offset(offset).Limit(limit).
-		Order("is_pinned DESC, created_at DESC").
+		Order(orderClause).
 		Find(&comments).Error
 
 	return comments, total, err

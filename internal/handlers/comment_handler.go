@@ -93,6 +93,7 @@ func parseTagNames(content string) []string {
 // @Param storyId path string true "Story ID"
 // @Param page query int false "Page number" default(1)
 // @Param limit query int false "Items per page" default(20)
+// @Param sort query string false "Sort by: newest, oldest, top" default(newest)
 // @Success 200 {object} response.Pagination
 // @Router /api/stories/{storyId}/comments [get]
 func (h *CommentHandler) GetCommentsByStory(c *gin.Context) {
@@ -105,8 +106,9 @@ func (h *CommentHandler) GetCommentsByStory(c *gin.Context) {
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	sortBy := c.DefaultQuery("sort", "newest")
 
-	comments, total, err := h.commentService.GetCommentsByStory(storyID, page, limit)
+	comments, total, err := h.commentService.GetCommentsByStory(storyID, page, limit, sortBy)
 	if err != nil {
 		response.InternalServerError(c, "Không thể lấy comments")
 		return
@@ -123,6 +125,7 @@ func (h *CommentHandler) GetCommentsByStory(c *gin.Context) {
 // @Param chapterId path string true "Chapter ID"
 // @Param page query int false "Page number" default(1)
 // @Param limit query int false "Items per page" default(20)
+// @Param sort query string false "Sort by: newest, oldest, top" default(newest)
 // @Success 200 {object} response.Pagination
 // @Router /api/chapters/{chapterId}/comments [get]
 func (h *CommentHandler) GetCommentsByChapter(c *gin.Context) {
@@ -135,8 +138,9 @@ func (h *CommentHandler) GetCommentsByChapter(c *gin.Context) {
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	sortBy := c.DefaultQuery("sort", "newest")
 
-	comments, total, err := h.commentService.GetCommentsByChapter(chapterID, page, limit)
+	comments, total, err := h.commentService.GetCommentsByChapter(chapterID, page, limit, sortBy)
 	if err != nil {
 		response.InternalServerError(c, "Không thể lấy comments")
 		return

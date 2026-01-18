@@ -125,6 +125,18 @@ func StrictRateLimiter() gin.HandlerFunc {
 	return limiter.Middleware()
 }
 
+// CommentRateLimiter - 15 comments/phút cho create/reply comments (chống spam)
+func CommentRateLimiter() gin.HandlerFunc {
+	limiter := NewRateLimiter(15, 1*time.Minute)
+	return limiter.Middleware()
+}
+
+// LikeRateLimiter - 60 likes/phút cho toggle like (chống like flooding)
+func LikeRateLimiter() gin.HandlerFunc {
+	limiter := NewRateLimiter(60, 1*time.Minute)
+	return limiter.Middleware()
+}
+
 // HealthCheckSkip - Skip health check từ rate limiting
 func HealthCheckSkip(c *gin.Context) bool {
 	return c.Request.URL.Path == "/health"

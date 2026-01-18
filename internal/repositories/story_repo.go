@@ -1,11 +1,23 @@
 package repositories
 
 import (
+	"strings"
+
 	"nekozanedex/internal/models"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+// escapeSearchQuery - Escape SQL LIKE wildcards to prevent injection and slow query attacks
+func escapeSearchQuery(query string) string {
+	// Escape backslash first (order matters)
+	query = strings.ReplaceAll(query, "\\", "\\\\")
+	// Escape % and _ which are LIKE wildcards
+	query = strings.ReplaceAll(query, "%", "\\%")
+	query = strings.ReplaceAll(query, "_", "\\_")
+	return query
+}
 
 type StoryRepository interface{
 	CreateStory(story *models.Story) error
@@ -19,8 +31,22 @@ type StoryRepository interface{
 	GetStoriesLatest(limit int) ([]models.Story, error)
 	GetStoriesHot(limit int) ([]models.Story, error)
 	SearchStories(query string, page, limit int) ([]models.Story, int64, error)
+	AdvancedSearchStories(filters *SearchFilters) ([]models.Story, int64, error)
 	SearchStoriesAdmin(query string, page, limit int) ([]models.Story, int64, error)
 	IncrementViewCountStory(id uuid.UUID) error
+}
+
+// SearchFilters - Filters for advanced story search
+type SearchFilters struct {
+	Query      string   // Text search query
+	Status     string   // ongoing, completed, hiatus
+	Country    string   // JP, CN, KR, VN
+	GenreSlugs []string // Genre slugs to filter by
+	YearFrom   *int     // Release year from
+	YearTo     *int     // Release year to
+	SortBy     string   // latest, popular, name, rating
+	Page       int
+	Limit      int
 }
 
 type storyRepository struct {
@@ -137,13 +163,76 @@ func (r *storyRepository) GetStoriesHot(limit int) ([]models.Story, error) {
 func (r *storyRepository) SearchStories(query string, page, limit int) ([]models.Story, int64, error) {
 	var stories []models.Story
 	var total int64
-	searchQuery := "%" + query + "%"
+	searchQuery := "%" + escapeSearchQuery(query) + "%"
 	
 	r.db.Model(&models.Story{}).Where("is_published = ? AND (title ILIKE ? OR description ILIKE ?)", 
 		true, searchQuery, searchQuery).Count(&total)
 	offset := (page - 1) * limit
 	err := r.db.Preload("Genres").Where("is_published = ? AND (title ILIKE ? OR description ILIKE ?)", 
 		true, searchQuery, searchQuery).Offset(offset).Limit(limit).Find(&stories).Error
+	return stories, total, err
+}
+
+// AdvancedSearchStories - Search with filters
+func (r *storyRepository) AdvancedSearchStories(filters *SearchFilters) ([]models.Story, int64, error) {
+	var stories []models.Story
+	var total int64
+
+	query := r.db.Model(&models.Story{}).Where("is_published = ?", true)
+
+	// Text search
+	if filters.Query != "" {
+		searchQuery := "%" + escapeSearchQuery(filters.Query) + "%"
+		query = query.Where("title ILIKE ? OR description ILIKE ?", searchQuery, searchQuery)
+	}
+
+	// Status filter
+	if filters.Status != "" {
+		query = query.Where("status = ?", filters.Status)
+	}
+
+	// Country filter
+	if filters.Country != "" {
+		query = query.Where("country = ?", filters.Country)
+	}
+
+	// Year range filter
+	if filters.YearFrom != nil {
+		query = query.Where("release_year >= ?", *filters.YearFrom)
+	}
+	if filters.YearTo != nil {
+		query = query.Where("release_year <= ?", *filters.YearTo)
+	}
+
+	// Genre filter - filter by genre slugs
+	if len(filters.GenreSlugs) > 0 {
+		query = query.Where(`id IN (
+			SELECT sg.story_id FROM story_genres sg
+			JOIN genres g ON sg.genre_id = g.id
+			WHERE g.slug IN ?
+		)`, filters.GenreSlugs)
+	}
+
+	// Count total
+	query.Count(&total)
+
+	// Sorting
+	orderClause := "updated_at DESC" // default: latest
+	switch filters.SortBy {
+	case "popular":
+		orderClause = "view_count DESC"
+	case "name":
+		orderClause = "title ASC"
+	case "rating":
+		orderClause = "rating DESC NULLS LAST"
+	case "oldest":
+		orderClause = "created_at ASC"
+	}
+
+	// Paginate and fetch
+	offset := (filters.Page - 1) * filters.Limit
+	err := query.Preload("Genres").Order(orderClause).Offset(offset).Limit(filters.Limit).Find(&stories).Error
+
 	return stories, total, err
 }
 
@@ -157,7 +246,7 @@ func (r *storyRepository) IncrementViewCountStory(id uuid.UUID) error {
 func (r *storyRepository) SearchStoriesAdmin(query string, page, limit int) ([]models.Story, int64, error) {
 	var stories []models.Story
 	var total int64
-	searchQuery := "%" + query + "%"
+	searchQuery := "%" + escapeSearchQuery(query) + "%"
 	
 	r.db.Model(&models.Story{}).Where("title ILIKE ? OR description ILIKE ?", 
 		searchQuery, searchQuery).Count(&total)

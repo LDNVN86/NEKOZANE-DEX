@@ -63,6 +63,7 @@ func main() {
 		&models.RefreshToken{},
 		&models.CommentLike{},
 		&models.CommentReport{},
+		&models.StoryRating{},
 	); err != nil {
 		log.Fatal("Không thể migrate database:", err)
 	}
@@ -96,6 +97,7 @@ func main() {
 	readingHistoryRepo := repositories.NewReadingHistoryRepository(db)
 	userSettingsRepo := repositories.NewUserSettingsRepository(db)
 	commentReportRepo := repositories.NewCommentReportRepository(db)
+	storyRatingRepo := repositories.NewStoryRatingRepository(db)
 
 	// Init Centrifugo client
 	centrifugoClient := centrifugo.NewClient(
@@ -146,6 +148,7 @@ func main() {
 	commentService := services.NewCommentService(commentRepo, storyRepo, chapterRepo)
 	notificationService := services.NewNotificationService(notificationRepo, centrifugoClient)
 	commentReportService := services.NewCommentReportService(commentReportRepo)
+	storyRatingService := services.NewStoryRatingService(storyRatingRepo, storyRepo)
 
 	// Start background job for scheduled chapter publishing
 	go func() {
@@ -183,6 +186,7 @@ func main() {
 		ReadingHistory: handlers.NewReadingHistoryHandler(readingHistoryRepo),
 		UserSettings:   handlers.NewUserSettingsHandler(services.NewUserSettingsService(userSettingsRepo)),
 		Centrifugo:     handlers.NewCentrifugoHandler(centrifugoClient),
+		StoryRating:    handlers.NewStoryRatingHandler(storyRatingService),
 	}
 
 	// Setup Gin router - Setup router cho Gin

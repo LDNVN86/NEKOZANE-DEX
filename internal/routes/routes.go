@@ -24,6 +24,7 @@ type Handlers struct {
 	ReadingHistory *handlers.ReadingHistoryHandler
 	UserSettings   *handlers.UserSettingsHandler
 	Centrifugo     *handlers.CentrifugoHandler
+	StoryRating    *handlers.StoryRatingHandler
 }
 
 func SetupRoutes(r *gin.Engine, cfg *config.Config, h *Handlers) {
@@ -87,6 +88,25 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config, h *Handlers) {
 			stories.GET("/:slug/chapters/:number", h.Chapter.GetChapterByNumber)
 		}
 
+		// ============ STORY RATING ROUTES ============
+		if h.StoryRating != nil {
+			ratings := api.Group("/ratings/story/:storyId")
+			{
+				// Public: get story rating
+				ratings.GET("", h.StoryRating.GetStoryRating)
+
+				// Authenticated: rate, get my rating, delete my rating
+				ratingsAuth := ratings.Group("")
+				ratingsAuth.Use(middleware.AuthMiddleware(cfg))
+				ratingsAuth.Use(middleware.RoleMiddleware("reader", "admin"))
+				{
+					ratingsAuth.POST("", h.StoryRating.RateStory)
+					ratingsAuth.GET("/my", h.StoryRating.GetMyRating)
+					ratingsAuth.DELETE("/my", h.StoryRating.DeleteMyRating)
+				}
+			}
+		}
+
 		// ============ GENRE ROUTES ============
 		genres := api.Group("/genres")
 		{
@@ -106,8 +126,8 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config, h *Handlers) {
 		commentsAuth.Use(middleware.AuthMiddleware(cfg))
 		commentsAuth.Use(middleware.RoleMiddleware("reader", "admin")) // Reader hoặc Admin
 		{
-			commentsAuth.POST("/:commentId/reply", h.Comment.ReplyComment)
-			commentsAuth.POST("/:commentId/like", h.Comment.ToggleLike)
+			commentsAuth.POST("/:commentId/reply", middleware.CommentRateLimiter(), h.Comment.ReplyComment)
+			commentsAuth.POST("/:commentId/like", middleware.LikeRateLimiter(), h.Comment.ToggleLike)
 			commentsAuth.POST("/:commentId/pin", h.Comment.TogglePin)
 			commentsAuth.POST("/:commentId/report", h.Comment.ReportComment)
 			commentsAuth.PUT("/:commentId", h.Comment.UpdateComment)
@@ -115,7 +135,7 @@ func SetupRoutes(r *gin.Engine, cfg *config.Config, h *Handlers) {
 		}
 
 		// Story comments (authenticated)
-		api.POST("/stories/:storyId/comments", middleware.AuthMiddleware(cfg), h.Comment.CreateComment)
+		api.POST("/stories/:storyId/comments", middleware.AuthMiddleware(cfg), middleware.CommentRateLimiter(), h.Comment.CreateComment)
 
 		// ============ BOOKMARK ROUTES (Reader + Admin) ============
 		bookmarks := api.Group("/bookmarks")

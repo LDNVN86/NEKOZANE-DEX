@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"strconv"
+	"strings"
 
 	"nekozanedex/internal/models"
+	"nekozanedex/internal/repositories"
 	"nekozanedex/internal/services"
 	"nekozanedex/pkg/response"
 
@@ -163,22 +165,72 @@ func (h *StoryHandler) GetRandomStory(c *gin.Context) {
 // @Summary Tìm kiếm truyện
 // @Tags Stories
 // @Produce json
-// @Param q query string true "Search query"
+// @Param q query string false "Search query"
+// @Param genres query string false "Genre slugs (comma separated)"
+// @Param status query string false "Status: ongoing, completed, hiatus"
+// @Param country query string false "Country: JP, CN, KR, VN"
+// @Param year_from query int false "Release year from"
+// @Param year_to query int false "Release year to"
+// @Param sort query string false "Sort: latest, popular, name, rating, oldest"
 // @Param page query int false "Page number" default(1)
 // @Param limit query int false "Items per page" default(20)
 // @Success 200 {object} response.Pagination
 // @Router /api/stories/search [get]
 func (h *StoryHandler) SearchStories(c *gin.Context) {
 	query := c.Query("q")
+	genresParam := c.Query("genres")
+	status := c.Query("status")
+	country := c.Query("country")
+	sortBy := c.DefaultQuery("sort", "latest")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 
-	if query == "" {
+	// Parse genres
+	var genreSlugs []string
+	if genresParam != "" {
+		for _, g := range strings.Split(genresParam, ",") {
+			g = strings.TrimSpace(g)
+			if g != "" {
+				genreSlugs = append(genreSlugs, g)
+			}
+		}
+	}
+
+	// Parse year filters
+	var yearFrom, yearTo *int
+	if yf := c.Query("year_from"); yf != "" {
+		if y, err := strconv.Atoi(yf); err == nil {
+			yearFrom = &y
+		}
+	}
+	if yt := c.Query("year_to"); yt != "" {
+		if y, err := strconv.Atoi(yt); err == nil {
+			yearTo = &y
+		}
+	}
+
+	// Use advanced search if any filter is provided
+	hasFilters := status != "" || country != "" || yearFrom != nil || yearTo != nil || sortBy != "latest" || len(genreSlugs) > 0
+	
+	if !hasFilters && query == "" {
 		response.BadRequest(c, "Từ khóa tìm kiếm không được để trống")
 		return
 	}
 
-	stories, total, err := h.storyService.SearchStories(query, page, limit)
+	// Import repositories for SearchFilters
+	filters := &repositories.SearchFilters{
+		Query:      query,
+		GenreSlugs: genreSlugs,
+		Status:     status,
+		Country:    country,
+		YearFrom:   yearFrom,
+		YearTo:     yearTo,
+		SortBy:     sortBy,
+		Page:       page,
+		Limit:      limit,
+	}
+
+	stories, total, err := h.storyService.AdvancedSearchStories(filters)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return

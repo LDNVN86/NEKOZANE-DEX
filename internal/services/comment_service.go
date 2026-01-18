@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"html"
 	"strings"
 
 	"nekozanedex/internal/models"
@@ -10,13 +11,21 @@ import (
 	"github.com/google/uuid"
 )
 
+// sanitizeCommentContent - Escape HTML entities to prevent XSS
+// Allows @mentions and ![gif]() markdown to pass through safely
+func sanitizeCommentContent(content string) string {
+	// Escape HTML special characters: < > & " '
+	content = html.EscapeString(content)
+	return content
+}
+
 type CommentService interface {
 	CreateComment(userID, storyID uuid.UUID, chapterID *uuid.UUID, content string) (*models.Comment, error)
 	ReplyComment(userID, parentID uuid.UUID, content string) (*models.Comment, error)
 	UpdateComment(userID, commentID uuid.UUID, content string) (*models.Comment, error)
 	DeleteComment(userID, commentID uuid.UUID, isAdmin bool) error
-	GetCommentsByStory(storyID uuid.UUID, page, limit int) ([]models.Comment, int64, error)
-	GetCommentsByChapter(chapterID uuid.UUID, page, limit int) ([]models.Comment, int64, error)
+	GetCommentsByStory(storyID uuid.UUID, page, limit int, sortBy string) ([]models.Comment, int64, error)
+	GetCommentsByChapter(chapterID uuid.UUID, page, limit int, sortBy string) ([]models.Comment, int64, error)
 	UpdateLikeCount(commentID uuid.UUID, count int) error
 	TogglePin(commentID uuid.UUID, isPinned bool) error
 	FindCommentByID(id uuid.UUID) (*models.Comment, error)
@@ -42,7 +51,7 @@ func NewCommentService(
 
 // CreateComment - Tạo comment mới
 func (s *commentService) CreateComment(userID, storyID uuid.UUID, chapterID *uuid.UUID, content string) (*models.Comment, error) {
-	// Validate content
+	// Validate and sanitize content
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return nil, errors.New("nội dung comment không được để trống")
@@ -51,6 +60,9 @@ func (s *commentService) CreateComment(userID, storyID uuid.UUID, chapterID *uui
 	if len(content) > 2000 {
 		return nil, errors.New("nội dung comment quá dài (tối đa 2000 ký tự)")
 	}
+
+	// Sanitize HTML to prevent XSS
+	content = sanitizeCommentContent(content)
 
 	// Check story exists
 	_, err := s.storyRepo.FindStoryByID(storyID)
@@ -89,11 +101,14 @@ func (s *commentService) CreateComment(userID, storyID uuid.UUID, chapterID *uui
 
 // ReplyComment - Trả lời comment
 func (s *commentService) ReplyComment(userID, parentID uuid.UUID, content string) (*models.Comment, error) {
-	// Validate content
+	// Validate and sanitize content
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return nil, errors.New("nội dung reply không được để trống")
 	}
+
+	// Sanitize HTML to prevent XSS
+	content = sanitizeCommentContent(content)
 
 	// Get parent comment
 	parentComment, err := s.commentRepo.FindCommentByID(parentID)
@@ -130,7 +145,7 @@ func (s *commentService) ReplyComment(userID, parentID uuid.UUID, content string
 
 // UpdateComment - Chỉnh sửa comment (chỉ owner mới được)
 func (s *commentService) UpdateComment(userID, commentID uuid.UUID, content string) (*models.Comment, error) {
-	// Validate content
+	// Validate and sanitize content
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return nil, errors.New("nội dung comment không được để trống")
@@ -139,6 +154,9 @@ func (s *commentService) UpdateComment(userID, commentID uuid.UUID, content stri
 	if len(content) > 2000 {
 		return nil, errors.New("nội dung comment quá dài (tối đa 2000 ký tự)")
 	}
+
+	// Sanitize HTML to prevent XSS
+	content = sanitizeCommentContent(content)
 
 	// Get existing comment
 	comment, err := s.commentRepo.FindCommentByID(commentID)
@@ -182,13 +200,13 @@ func (s *commentService) DeleteComment(userID, commentID uuid.UUID, isAdmin bool
 }
 
 // GetCommentsByStory - Lấy comments của truyện
-func (s *commentService) GetCommentsByStory(storyID uuid.UUID, page, limit int) ([]models.Comment, int64, error) {
-	return s.commentRepo.GetCommentsByStory(storyID, page, limit)
+func (s *commentService) GetCommentsByStory(storyID uuid.UUID, page, limit int, sortBy string) ([]models.Comment, int64, error) {
+	return s.commentRepo.GetCommentsByStory(storyID, page, limit, sortBy)
 }
 
 // GetCommentsByChapter - Lấy comments của chapter
-func (s *commentService) GetCommentsByChapter(chapterID uuid.UUID, page, limit int) ([]models.Comment, int64, error) {
-	return s.commentRepo.GetCommentsByChapter(chapterID, page, limit)
+func (s *commentService) GetCommentsByChapter(chapterID uuid.UUID, page, limit int, sortBy string) ([]models.Comment, int64, error) {
+	return s.commentRepo.GetCommentsByChapter(chapterID, page, limit, sortBy)
 }
 
 // UpdateLikeCount - Update cached like count for a comment

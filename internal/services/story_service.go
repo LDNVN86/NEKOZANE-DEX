@@ -22,6 +22,7 @@ type StoryService interface {
 	GetLatestStories(limit int) ([]models.Story, error)
 	GetHotStories(limit int) ([]models.Story, error)
 	SearchStories(query string, page, limit int) ([]models.Story, int64, error)
+	AdvancedSearchStories(filters *repositories.SearchFilters) ([]models.Story, int64, error)
 	GetRandomStory() (*models.Story, error)
 	GetAllGenres() ([]models.Genre, error)
 
@@ -261,6 +262,18 @@ func (s *storyService) SearchStories(query string, page, limit int) ([]models.St
 		return nil, 0, errors.New("từ khóa tìm kiếm không được để trống")
 	}
 	return s.storyRepo.SearchStories(query, page, limit)
+}
+
+// AdvancedSearchStories - Tìm kiếm nâng cao với bộ lọc (Public)
+func (s *storyService) AdvancedSearchStories(filters *repositories.SearchFilters) ([]models.Story, int64, error) {
+	// Set defaults
+	if filters.Page < 1 {
+		filters.Page = 1
+	}
+	if filters.Limit < 1 || filters.Limit > 100 {
+		filters.Limit = 20
+	}
+	return s.storyRepo.AdvancedSearchStories(filters)
 }
 
 // GetRandomStory - Lấy truyện ngẫu nhiên (Public)
